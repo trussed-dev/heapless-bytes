@@ -2,7 +2,7 @@
 //!
 //! Newtype around heapless byte Vec with efficient serde.
 
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
 use core::{
     cmp::Ordering,
@@ -17,7 +17,7 @@ pub use heapless::ArrayLength;
 use heapless::Vec;
 
 use serde::{
-    de::{Deserialize, Deserializer, Error as _, SeqAccess, Visitor},
+    de::{Deserialize, Deserializer, Visitor},
     ser::{Serialize, Serializer},
 };
 
@@ -246,25 +246,6 @@ where
                 formatter.write_str("a sequence")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
-                let mut values: Vec<u8, N> = Vec::new();
-                // hprintln!("made a values: {:?} of capacity {:?}",
-                //           &values, N::to_usize()).ok();
-
-                while let Some(value) = seq.next_element()? {
-                    if values.push(value).is_err() {
-                        // hprintln!("error! {}", values.capacity() + 1).ok();
-                        // hprintln!("pushing value {:?} errored", &value).ok();
-                        return Err(A::Error::invalid_length(values.capacity() + 1, &self))?;
-                    }
-                }
-
-                Ok(Bytes::from(values))
-            }
-
             fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
@@ -287,7 +268,8 @@ where
                 Ok(Bytes::<N>::from(buf))
             }
         }
-        deserializer.deserialize_seq(ValueVisitor(PhantomData))
+
+        deserializer.deserialize_bytes(ValueVisitor(PhantomData))
     }
 }
 
