@@ -78,6 +78,14 @@ impl<N: ArrayLength<u8>> Bytes<N> {
         Ok(())
     }
 
+    pub fn resize_default(&mut self, new_len: usize) -> core::result::Result<(), ()> {
+        self.bytes.resize_default(new_len)
+    }
+
+    pub fn resize_to_capacity(&mut self) {
+        self.bytes.resize_default(self.bytes.len()).ok();
+    }
+
     // pub fn deref_mut(&mut self) -> &mut [u8] {
     //     self.bytes.deref_mut()
     // }
