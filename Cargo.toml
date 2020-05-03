@@ -10,6 +10,10 @@ repository = "https://github.com/ycrypto/heapless-bytes"
 readme = "README.md"
 edition = "2018"
 
+[dependencies]
+ufmt = "0.1.0"
+typenum = "1.11.2"
+
 [dependencies.heapless]
 version = "0.5.1"
 default-features = false

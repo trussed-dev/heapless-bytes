@@ -14,6 +14,10 @@ use core::{
 
 pub use heapless::consts;
 pub use heapless::ArrayLength;
+// bring trait in scope to use `consts::Uxx::USIZE` etc.,
+// to get the corresponding size of Bytes.
+pub use typenum::Unsigned;
+
 use heapless::Vec;
 
 use serde::{
@@ -24,6 +28,17 @@ use serde::{
 #[derive(Clone, Default, Eq)]
 pub struct Bytes<N: ArrayLength<u8>> {
     bytes: Vec<u8, N>,
+}
+
+pub type Bytes8 = Bytes<consts::U8>;
+pub type Bytes16 = Bytes<consts::U16>;
+pub type Bytes32 = Bytes<consts::U32>;
+pub type Bytes64 = Bytes<consts::U64>;
+
+impl<N: ArrayLength<u8>> From<Vec<u8, N>> for Bytes<N> {
+    fn from(vec: Vec<u8, N>) -> Self {
+        Self { bytes: vec }
+    }
 }
 
 impl<N: ArrayLength<u8>> Bytes<N> {
@@ -49,6 +64,13 @@ impl<N: ArrayLength<u8>> Bytes<N> {
         self.bytes
     }
 
+    /// Low-noise conversion between lengths.
+    ///
+    /// We can't implement TryInto since it would clash with blanket implementations.
+    pub fn try_convert_into<M: ArrayLength<u8>>(&self) -> Result<Bytes<M>, ()> {
+        Bytes::<M>::try_from_slice(self)
+    }
+
     // #[doc(hidden)]
     // pub fn into_iter(self) -> <Vec<u8, N> as IntoIterator>::IntoIter {
     //     self.bytes.into_iter()
@@ -59,6 +81,43 @@ impl<N: ArrayLength<u8>> Bytes<N> {
         bytes.extend_from_slice(slice)?;
         Ok(Self::from(bytes))
     }
+
+    /// Some APIs offer an interface of the form `f(&mut [u8]) -> Result<usize, E>`,
+    /// with the contract that the Ok-value signals how many bytes were written.
+    ///
+    /// This constructor allows wrapping such interfaces in a more ergonomic way,
+    /// returning a Bytes willed using `f`.
+    ///
+    /// It seems it's not possible to do this as an actual `TryFrom` implementation.
+    pub fn try_from<E>(
+        f: impl FnOnce(&mut [u8]) -> core::result::Result<usize, E>
+    )
+        -> core::result::Result<Self, E>
+    {
+        let mut data = Self::new();
+        data.resize_to_capacity();
+        let result = f(&mut data);
+
+        result.map(|count| {
+            data.resize_default(count).unwrap();
+            data
+        })
+    }
+
+    // pub fn try_from<'a, E>(
+    //     f: impl FnOnce(&'a mut [u8]) -> core::result::Result<&'a mut [u8], E>
+    // )
+    //     -> core::result::Result<Self, E>
+    // {
+    //     let mut data = Self::new();
+    //     data.resize_to_capacity();
+    //     let result = f(&mut data);
+
+    //     result.map(|count| {
+    //         data.resize_default(count).unwrap();
+    //         data
+    //     })
+    // }
 
     // cf. https://internals.rust-lang.org/t/add-vec-insert-slice-at-to-insert-the-content-of-a-slice-at-an-arbitrary-index/11008/3
     pub fn insert_slice_at(&mut self, slice: &[u8], at: usize) -> core::result::Result<(), ()> {
@@ -83,7 +142,7 @@ impl<N: ArrayLength<u8>> Bytes<N> {
     }
 
     pub fn resize_to_capacity(&mut self) {
-        self.bytes.resize_default(self.bytes.len()).ok();
+        self.bytes.resize_default(self.bytes.capacity()).ok();
     }
 
     // pub fn deref_mut(&mut self) -> &mut [u8] {
@@ -113,6 +172,26 @@ impl<N: ArrayLength<u8>> Bytes<N> {
     }
 }
 
+// impl<N, E, F> TryFrom<F> for Bytes<N>
+// where
+//     N: ArrayLength<u8>,
+//     F: FnOnce(&mut [u8]) -> Result<usize, E>,
+// {
+//     type Error = E;
+
+//     fn try_from(f: F) -> Result<Self, Self::Error>  {
+
+//         let mut data = Self::new();
+//         data.resize_to_capacity();
+//         let result = f(&mut data);
+
+//         result.map(|count| {
+//             data.resize_default(count).unwrap();
+//             data
+//         })
+//     }
+// }
+
 impl<N: ArrayLength<u8>> Debug for Bytes<N> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // TODO: There has to be a better way :'-)
@@ -128,6 +207,18 @@ impl<N: ArrayLength<u8>> Debug for Bytes<N> {
         }
         f.write_str("'")?;
         Ok(())
+    }
+}
+
+impl<N> ufmt::uDebug for Bytes<N>
+where
+    N: ArrayLength<u8>,
+{
+    fn fmt<W>(&self, f: &mut ufmt::Formatter<'_, W>) -> Result<(), W::Error>
+    where
+        W: ufmt::uWrite + ?Sized,
+    {
+        <[u8] as ufmt::uDebug>::fmt(self, f)
     }
 }
 
