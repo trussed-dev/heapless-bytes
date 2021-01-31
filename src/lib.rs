@@ -10,13 +10,14 @@ use core::{
     hash::{Hash, Hasher},
     marker::PhantomData,
     ops::{Deref, DerefMut},
+    ptr,
 };
 
 pub use heapless::consts;
 pub use heapless::ArrayLength;
 // bring trait in scope to use `consts::Uxx::USIZE` etc.,
 // to get the corresponding size of Bytes.
-pub use typenum::Unsigned;
+pub use typenum::{IsGreaterOrEqual, True, Unsigned};
 
 use heapless::Vec;
 
@@ -59,9 +60,26 @@ impl<N: ArrayLength<u8>> Bytes<N> {
         }
     }
 
-    /// Unwrap the vector of byte underlying this `Bytes<N>`.
+    /// Unwraps the Vec<u8, N>, same as `into_vec`.
+    pub fn into_inner(self) -> Vec<u8, N> {
+        self.bytes
+    }
+
+    /// Unwraps the Vec<u8, N>, same as `into_inner`.
     pub fn into_vec(self) -> Vec<u8, N> {
         self.bytes
+    }
+
+    /// Returns an immutable slice view.
+    // Add as inherent method as it's annoying to import AsSlice.
+    pub fn as_slice(&self) -> &[u8] {
+        self.bytes.as_ref()
+    }
+
+    /// Returns a mutable slice view.
+    // Add as inherent method as it's annoying to import AsSlice.
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.bytes.as_mut()
     }
 
     /// Low-noise conversion between lengths.
@@ -137,12 +155,58 @@ impl<N: ArrayLength<u8>> Bytes<N> {
         Ok(())
     }
 
+    pub fn insert(&mut self, index: usize, item: u8) -> Result<(), u8> {
+        self.insert_slice_at(&[item], index).map_err(|_| item)
+    }
+
+    pub fn remove(&mut self, index: usize) -> Result<u8, ()> {
+        if index < self.len() {
+            unsafe { Ok(self.remove_unchecked(index)) }
+        } else {
+            Err(())
+        }
+    }
+
+    pub(crate) unsafe fn remove_unchecked(&mut self, index: usize) -> u8 {
+        // the place we are taking from.
+        let p = (self.bytes.as_mut_ptr() as *mut u8).add(index);
+
+        // copy it out, unsafely having a copy of the value on
+        // the stack and in the vector at the same time.
+        let ret = ptr::read(p);
+
+        // shift everything down to fill in that spot.
+        ptr::copy(p.offset(1), p, self.len() - index - 1);
+
+        self.resize_default(self.len() - 1).unwrap();
+        ret
+    }
+
     pub fn resize_default(&mut self, new_len: usize) -> core::result::Result<(), ()> {
         self.bytes.resize_default(new_len)
     }
 
     pub fn resize_to_capacity(&mut self) {
         self.bytes.resize_default(self.bytes.capacity()).ok();
+    }
+
+    /// Clone into at least same size byte buffer.
+    pub fn to_bytes<M>(&self) -> Bytes<M>
+    where
+        M: ArrayLength<u8> + IsGreaterOrEqual<N, Output = True>,
+    {
+        match Bytes::<M>::try_from_slice(self) {
+            Ok(byte_buf) => byte_buf,
+            _ => unreachable!(),
+        }
+    }
+
+    /// Fallible conversion into differently sized byte buffer.
+    pub fn try_to_bytes<M>(&self) -> Result<Bytes<M>, ()>
+    where
+        M: ArrayLength<u8>,
+    {
+        Bytes::<M>::try_from_slice(self)
     }
 
     // pub fn deref_mut(&mut self) -> &mut [u8] {

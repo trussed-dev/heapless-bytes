@@ -1,6 +1,6 @@
 [package]
 name = "heapless-bytes"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Nicolas Stalder <n@stalder.io>"]
 license = "Apache-2.0 OR MIT"
 description = "Newtype around heapless byte Vec with efficient serde."
