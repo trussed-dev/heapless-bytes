@@ -274,18 +274,6 @@ impl<N: ArrayLength<u8>> Debug for Bytes<N> {
     }
 }
 
-impl<N> ufmt::uDebug for Bytes<N>
-where
-    N: ArrayLength<u8>,
-{
-    fn fmt<W>(&self, f: &mut ufmt::Formatter<'_, W>) -> Result<(), W::Error>
-    where
-        W: ufmt::uWrite + ?Sized,
-    {
-        <[u8] as ufmt::uDebug>::fmt(self, f)
-    }
-}
-
 impl<N: ArrayLength<u8>> AsRef<[u8]> for Bytes<N> {
     fn as_ref(&self) -> &[u8] {
         &self.bytes

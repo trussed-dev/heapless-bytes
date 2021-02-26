@@ -1,6 +1,6 @@
 [package]
 name = "heapless-bytes"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Nicolas Stalder <n@stalder.io>"]
 license = "Apache-2.0 OR MIT"
 description = "Newtype around heapless byte Vec with efficient serde."
@@ -11,11 +11,10 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-ufmt = "0.1.0"
 typenum = "1.11.2"
 
 [dependencies.heapless]
-version = "0.5.1"
+version = "0.6"
 default-features = false
 
 [dependencies.serde]
