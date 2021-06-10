@@ -13,8 +13,6 @@ use core::{
     ptr,
 };
 
-pub use heapless::consts;
-pub use heapless::ArrayLength;
 // bring trait in scope to use `consts::Uxx::USIZE` etc.,
 // to get the corresponding size of Bytes.
 pub use typenum::{IsGreaterOrEqual, True, Unsigned};
@@ -27,22 +25,22 @@ use serde::{
 };
 
 #[derive(Clone, Default, Eq)]
-pub struct Bytes<N: ArrayLength<u8>> {
+pub struct Bytes<const N: usize> {
     bytes: Vec<u8, N>,
 }
 
-pub type Bytes8 = Bytes<consts::U8>;
-pub type Bytes16 = Bytes<consts::U16>;
-pub type Bytes32 = Bytes<consts::U32>;
-pub type Bytes64 = Bytes<consts::U64>;
+pub type Bytes8 = Bytes<8>;
+pub type Bytes16 = Bytes<16>;
+pub type Bytes32 = Bytes<32>;
+pub type Bytes64 = Bytes<64>;
 
-impl<N: ArrayLength<u8>> From<Vec<u8, N>> for Bytes<N> {
+impl<const N: usize> From<Vec<u8, N>> for Bytes<N> {
     fn from(vec: Vec<u8, N>) -> Self {
         Self { bytes: vec }
     }
 }
 
-impl<N: ArrayLength<u8>> Bytes<N> {
+impl<const N: usize> Bytes<N> {
     /// Construct a new, empty `Bytes<N>`.
     pub fn new() -> Self {
         Bytes::from(Vec::new())
@@ -85,8 +83,8 @@ impl<N: ArrayLength<u8>> Bytes<N> {
     /// Low-noise conversion between lengths.
     ///
     /// We can't implement TryInto since it would clash with blanket implementations.
-    pub fn try_convert_into<M: ArrayLength<u8>>(&self) -> Result<Bytes<M>, ()> {
-        Bytes::<M>::try_from_slice(self)
+    pub fn try_convert_into<const M: usize>(&self) -> Result<Bytes<M>, ()> {
+        Bytes::<M>::from_slice(self)
     }
 
     // #[doc(hidden)]
@@ -94,7 +92,13 @@ impl<N: ArrayLength<u8>> Bytes<N> {
     //     self.bytes.into_iter()
     // }
 
-    pub fn try_from_slice(slice: &[u8]) -> core::result::Result<Self, ()> {
+    // pub fn try_from_slice(slice: &[u8]) -> core::result::Result<Self, ()> {
+    //     let mut bytes = Vec::<u8, N>::new();
+    //     bytes.extend_from_slice(slice)?;
+    //     Ok(Self::from(bytes))
+    // }
+
+    pub fn from_slice(slice: &[u8]) -> core::result::Result<Self, ()> {
         let mut bytes = Vec::<u8, N>::new();
         bytes.extend_from_slice(slice)?;
         Ok(Self::from(bytes))
@@ -190,24 +194,28 @@ impl<N: ArrayLength<u8>> Bytes<N> {
         self.bytes.resize_default(self.bytes.capacity()).ok();
     }
 
-    /// Clone into at least same size byte buffer.
-    pub fn to_bytes<M>(&self) -> Bytes<M>
-    where
-        M: ArrayLength<u8> + IsGreaterOrEqual<N, Output = True>,
-    {
-        match Bytes::<M>::try_from_slice(self) {
-            Ok(byte_buf) => byte_buf,
-            _ => unreachable!(),
-        }
-    }
+    // /// Clone into at least same size byte buffer.
+    // pub fn to_bytes<M>(&self) -> Bytes<M>
+    // where
+    //     M: ArrayLength<u8> + IsGreaterOrEqual<N, Output = True>,
+    // {
+    //     match Bytes::<M>::try_from_slice(self) {
+    //         Ok(byte_buf) => byte_buf,
+    //         _ => unreachable!(),
+    //     }
+    // }
 
     /// Fallible conversion into differently sized byte buffer.
-    pub fn try_to_bytes<M>(&self) -> Result<Bytes<M>, ()>
-    where
-        M: ArrayLength<u8>,
+    pub fn to_bytes<const M: usize>(&self) -> Result<Bytes<M>, ()>
     {
-        Bytes::<M>::try_from_slice(self)
+        Bytes::<M>::from_slice(self)
     }
+
+    // /// Fallible conversion into differently sized byte buffer.
+    // pub fn try_to_bytes<const M: usize>(&self) -> Result<Bytes<M>, ()>
+    // {
+    //     Bytes::<M>::from_slice(self)
+    // }
 
     // pub fn deref_mut(&mut self) -> &mut [u8] {
     //     self.bytes.deref_mut()
@@ -219,7 +227,7 @@ impl<N: ArrayLength<u8>> Bytes<N> {
         T: Serialize,
     {
         let mut vec = Vec::<u8, N>::new();
-        vec.resize_default(N::to_usize()).unwrap();
+        vec.resize_default(N).unwrap();
         let buffer = vec.deref_mut();
 
         let writer = serde_cbor::ser::SliceWrite::new(buffer);
@@ -256,7 +264,7 @@ impl<N: ArrayLength<u8>> Bytes<N> {
 //     }
 // }
 
-impl<N: ArrayLength<u8>> Debug for Bytes<N> {
+impl<const N: usize> Debug for Bytes<N> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // TODO: There has to be a better way :'-)
 
@@ -274,19 +282,19 @@ impl<N: ArrayLength<u8>> Debug for Bytes<N> {
     }
 }
 
-impl<N: ArrayLength<u8>> AsRef<[u8]> for Bytes<N> {
+impl<const N: usize> AsRef<[u8]> for Bytes<N> {
     fn as_ref(&self) -> &[u8] {
         &self.bytes
     }
 }
 
-impl<N: ArrayLength<u8>> AsMut<[u8]> for Bytes<N> {
+impl<const N: usize> AsMut<[u8]> for Bytes<N> {
     fn as_mut(&mut self) -> &mut [u8] {
         &mut self.bytes
     }
 }
 
-impl<N: ArrayLength<u8>> Deref for Bytes<N> {
+impl<const N: usize> Deref for Bytes<N> {
     type Target = Vec<u8, N>;
 
     fn deref(&self) -> &Self::Target {
@@ -294,7 +302,7 @@ impl<N: ArrayLength<u8>> Deref for Bytes<N> {
     }
 }
 
-impl<N: ArrayLength<u8>> DerefMut for Bytes<N> {
+impl<const N: usize> DerefMut for Bytes<N> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.bytes
     }
@@ -312,7 +320,7 @@ impl<N: ArrayLength<u8>> DerefMut for Bytes<N> {
 //     }
 // }
 
-impl<N: ArrayLength<u8>, Rhs> PartialEq<Rhs> for Bytes<N>
+impl<Rhs, const N: usize> PartialEq<Rhs> for Bytes<N>
 where
     Rhs: ?Sized + AsRef<[u8]>,
 {
@@ -321,7 +329,7 @@ where
     }
 }
 
-impl<N: ArrayLength<u8>, Rhs> PartialOrd<Rhs> for Bytes<N>
+impl<Rhs, const N: usize> PartialOrd<Rhs> for Bytes<N>
 where
     Rhs: ?Sized + AsRef<[u8]>,
 {
@@ -330,13 +338,13 @@ where
     }
 }
 
-impl<N: ArrayLength<u8>> Hash for Bytes<N> {
+impl<const N: usize> Hash for Bytes<N> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.bytes.hash(state);
     }
 }
 
-impl<N: ArrayLength<u8>> IntoIterator for Bytes<N> {
+impl<const N: usize> IntoIterator for Bytes<N> {
     type Item = u8;
     type IntoIter = <Vec<u8, N> as IntoIterator>::IntoIter;
 
@@ -345,7 +353,7 @@ impl<N: ArrayLength<u8>> IntoIterator for Bytes<N> {
     }
 }
 
-impl<'a, N: ArrayLength<u8>> IntoIterator for &'a Bytes<N> {
+impl<'a, const N: usize> IntoIterator for &'a Bytes<N> {
     type Item = &'a u8;
     type IntoIter = <&'a [u8] as IntoIterator>::IntoIter;
 
@@ -354,7 +362,7 @@ impl<'a, N: ArrayLength<u8>> IntoIterator for &'a Bytes<N> {
     }
 }
 
-impl<'a, N: ArrayLength<u8>> IntoIterator for &'a mut Bytes<N> {
+impl<'a, const N: usize> IntoIterator for &'a mut Bytes<N> {
     type Item = &'a mut u8;
     type IntoIter = <&'a mut [u8] as IntoIterator>::IntoIter;
 
@@ -363,9 +371,7 @@ impl<'a, N: ArrayLength<u8>> IntoIterator for &'a mut Bytes<N> {
     }
 }
 
-impl<N> Serialize for Bytes<N>
-where
-    N: ArrayLength<u8>,
+impl<const N: usize> Serialize for Bytes<N>
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -376,19 +382,15 @@ where
 }
 
 // TODO: can we delegate to Vec<u8, N> deserialization instead of reimplementing?
-impl<'de, N> Deserialize<'de> for Bytes<N>
-where
-    N: ArrayLength<u8>,
+impl<'de, const N: usize> Deserialize<'de> for Bytes<N>
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        struct ValueVisitor<'de, N>(PhantomData<(&'de (), N)>);
+        struct ValueVisitor<'de, const N: usize>(PhantomData<&'de ()>);
 
-        impl<'de, N> Visitor<'de> for ValueVisitor<'de, N>
-        where
-            N: ArrayLength<u8>,
+        impl<'de, const N: usize> Visitor<'de> for ValueVisitor<'de, N>
         {
             // type Value = Vec<T, N>;
             type Value = Bytes<N>;
@@ -401,7 +403,7 @@ where
             where
                 E: serde::de::Error,
             {
-                if v.len() > N::to_usize() {
+                if v.len() > N {
                     // hprintln!("error! own size: {}, data size: {}", N::to_usize(), v.len()).ok();
                     // return Err(E::invalid_length(values.capacity() + 1, &self))?;
                     return Err(E::invalid_length(v.len(), &self))?;
