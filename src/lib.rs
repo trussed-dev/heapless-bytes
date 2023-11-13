@@ -430,7 +430,6 @@ impl<'de, const N: usize> Deserialize<'de> for Bytes<N>
 #[cfg(feature = "cbor")]
 mod tests {
     use super::*;
-    use heapless::consts;
 
     #[test]
     fn test_client_data_hash() {
@@ -439,7 +438,7 @@ mod tests {
             0x44, 0x45, 0x46,
         ];
 
-        let client_data_hash: Bytes<consts::U32> =
+        let client_data_hash: Bytes<17> =
             serde_cbor::de::from_mut_slice(&mut minimal).unwrap();
 
         assert_eq!(client_data_hash, b"1234567890ABCDEF");

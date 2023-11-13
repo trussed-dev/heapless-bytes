@@ -11,10 +11,10 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-typenum = "1.11.2"
+typenum = ">=1.11.2"
 
 [dependencies.heapless]
-version = "0.7"
+version = "^0.8"
 default-features = false
 
 [dependencies.serde]
