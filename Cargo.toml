@@ -8,7 +8,7 @@ categories = ["embedded", "encoding", "no-std"]
 keywords = ["serde", "cbor", "rust", "no-std"]
 repository = "https://github.com/ycrypto/heapless-bytes"
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 typenum = ">=1.11.2"
