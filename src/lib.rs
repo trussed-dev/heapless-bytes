@@ -3,6 +3,7 @@
 //! Newtype around heapless byte Vec with efficient serde.
 
 #![cfg_attr(not(test), no_std)]
+#![allow(clippy::result_unit_err)]
 
 use core::{
     cmp::Ordering,
@@ -167,7 +168,7 @@ impl<const N: usize> Bytes<N> {
 
     pub(crate) unsafe fn remove_unchecked(&mut self, index: usize) -> u8 {
         // the place we are taking from.
-        let p = (self.bytes.as_mut_ptr() as *mut u8).add(index);
+        let p = self.bytes.as_mut_ptr().add(index);
 
         // copy it out, unsafely having a copy of the value on
         // the stack and in the vector at the same time.
