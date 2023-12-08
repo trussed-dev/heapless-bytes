@@ -238,11 +238,7 @@ impl<const N: usize> Debug for Bytes<N> {
         use core::ascii::escape_default;
         f.write_str("b'")?;
         for byte in &self.bytes {
-            for ch in escape_default(*byte) {
-                // Debug::fmt(unsafe { core::str::from_utf8_unchecked(&[ch]) }, f)?;
-                f.write_str(unsafe { core::str::from_utf8_unchecked(&[ch]) })?;
-                // f.write(&ch);
-            }
+            write!(f, "{}", escape_default(*byte))?;
         }
         f.write_str("'")?;
         Ok(())
@@ -395,7 +391,7 @@ mod tests_serde {
     use serde_test::{assert_tokens, Token};
 
     #[test]
-    fn all() {
+    fn serde() {
         let mut bytes = Bytes::<0>::new();
         assert!(bytes.push(1).is_err());
         assert_tokens(&bytes, &[Token::Bytes(&[])]);
@@ -412,6 +408,14 @@ mod tests_serde {
             &[Token::Bytes(&[
                 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
             ])],
+        );
+    }
+
+    #[test]
+    fn display() {
+        assert_eq!(
+            r"b'\x00abcde\n'",
+            format!("{:?}", Bytes::<10>::from_slice(b"\0abcde\n").unwrap())
         );
     }
 }
