@@ -108,10 +108,8 @@ impl<const N: usize> Bytes<N> {
     ///
     /// It seems it's not possible to do this as an actual `TryFrom` implementation.
     pub fn try_from<E>(
-        f: impl FnOnce(&mut [u8]) -> core::result::Result<usize, E>
-    )
-        -> core::result::Result<Self, E>
-    {
+        f: impl FnOnce(&mut [u8]) -> core::result::Result<usize, E>,
+    ) -> core::result::Result<Self, E> {
         let mut data = Self::new();
         data.resize_to_capacity();
         let result = f(&mut data);
@@ -202,8 +200,7 @@ impl<const N: usize> Bytes<N> {
     // }
 
     /// Fallible conversion into differently sized byte buffer.
-    pub fn to_bytes<const M: usize>(&self) -> Result<Bytes<M>, ()>
-    {
+    pub fn to_bytes<const M: usize>(&self) -> Result<Bytes<M>, ()> {
         Bytes::<M>::from_slice(self)
     }
 
@@ -367,8 +364,7 @@ impl<'a, const N: usize> IntoIterator for &'a mut Bytes<N> {
     }
 }
 
-impl<const N: usize> Serialize for Bytes<N>
-{
+impl<const N: usize> Serialize for Bytes<N> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -378,16 +374,14 @@ impl<const N: usize> Serialize for Bytes<N>
 }
 
 // TODO: can we delegate to Vec<u8, N> deserialization instead of reimplementing?
-impl<'de, const N: usize> Deserialize<'de> for Bytes<N>
-{
+impl<'de, const N: usize> Deserialize<'de> for Bytes<N> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         struct ValueVisitor<'de, const N: usize>(PhantomData<&'de ()>);
 
-        impl<'de, const N: usize> Visitor<'de> for ValueVisitor<'de, N>
-        {
+        impl<'de, const N: usize> Visitor<'de> for ValueVisitor<'de, N> {
             // type Value = Vec<T, N>;
             type Value = Bytes<N>;
 
