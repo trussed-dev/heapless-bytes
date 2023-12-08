@@ -22,3 +22,6 @@ optional = true
 
 [features]
 cbor = ["serde_cbor"]
+
+[dev-dependencies]
+serde_test = "1.0.176"
