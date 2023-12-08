@@ -9,7 +9,6 @@ use core::{
     cmp::Ordering,
     fmt::{self, Debug},
     hash::{Hash, Hasher},
-    marker::PhantomData,
     ops::{Deref, DerefMut},
     ptr,
 };
@@ -354,10 +353,9 @@ impl<'de, const N: usize> Deserialize<'de> for Bytes<N> {
     where
         D: Deserializer<'de>,
     {
-        struct ValueVisitor<'de, const N: usize>(PhantomData<&'de ()>);
+        struct ValueVisitor<const N: usize>;
 
-        impl<'de, const N: usize> Visitor<'de> for ValueVisitor<'de, N> {
-            // type Value = Vec<T, N>;
+        impl<'de, const N: usize> Visitor<'de> for ValueVisitor<N> {
             type Value = Bytes<N>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -387,7 +385,7 @@ impl<'de, const N: usize> Deserialize<'de> for Bytes<N> {
             }
         }
 
-        deserializer.deserialize_bytes(ValueVisitor(PhantomData))
+        deserializer.deserialize_bytes(ValueVisitor)
     }
 }
 
