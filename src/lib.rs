@@ -390,6 +390,33 @@ impl<'de, const N: usize> Deserialize<'de> for Bytes<N> {
 }
 
 #[cfg(test)]
+mod tests_serde {
+    use super::*;
+    use serde_test::{assert_tokens, Token};
+
+    #[test]
+    fn all() {
+        let mut bytes = Bytes::<0>::new();
+        assert!(bytes.push(1).is_err());
+        assert_tokens(&bytes, &[Token::Bytes(&[])]);
+
+        let mut bytes = Bytes::<16>::new();
+        bytes.push(1).unwrap();
+        assert_tokens(&bytes, &[Token::Bytes(&[1])]);
+        assert!(bytes.extend_from_slice(&[2; 16]).is_err());
+        assert_eq!(&**bytes, &[1]);
+        assert!(bytes.extend_from_slice(&[2; 15]).is_ok());
+        assert_eq!(&**bytes, &[1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]);
+        assert_tokens(
+            &bytes,
+            &[Token::Bytes(&[
+                1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+            ])],
+        );
+    }
+}
+
+#[cfg(test)]
 #[cfg(feature = "cbor")]
 mod tests {
     use super::*;
