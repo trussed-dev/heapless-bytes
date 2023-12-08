@@ -84,11 +84,6 @@ impl<const N: usize> Bytes<N> {
         Bytes::<M>::from_slice(self)
     }
 
-    // #[doc(hidden)]
-    // pub fn into_iter(self) -> <Vec<u8, N> as IntoIterator>::IntoIter {
-    //     self.bytes.into_iter()
-    // }
-
     // pub fn try_from_slice(slice: &[u8]) -> core::result::Result<Self, ()> {
     //     let mut bytes = Vec::<u8, N>::new();
     //     bytes.extend_from_slice(slice)?;
