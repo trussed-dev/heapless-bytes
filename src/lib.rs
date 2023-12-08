@@ -189,31 +189,10 @@ impl<const N: usize> Bytes<N> {
         self.bytes.resize_default(self.bytes.capacity()).ok();
     }
 
-    // /// Clone into at least same size byte buffer.
-    // pub fn to_bytes<M>(&self) -> Bytes<M>
-    // where
-    //     M: ArrayLength<u8> + IsGreaterOrEqual<N, Output = True>,
-    // {
-    //     match Bytes::<M>::try_from_slice(self) {
-    //         Ok(byte_buf) => byte_buf,
-    //         _ => unreachable!(),
-    //     }
-    // }
-
     /// Fallible conversion into differently sized byte buffer.
     pub fn to_bytes<const M: usize>(&self) -> Result<Bytes<M>, ()> {
         Bytes::<M>::from_slice(self)
     }
-
-    // /// Fallible conversion into differently sized byte buffer.
-    // pub fn try_to_bytes<const M: usize>(&self) -> Result<Bytes<M>, ()>
-    // {
-    //     Bytes::<M>::from_slice(self)
-    // }
-
-    // pub fn deref_mut(&mut self) -> &mut [u8] {
-    //     self.bytes.deref_mut()
-    // }
 
     #[cfg(feature = "cbor")]
     pub fn from_serialized<T>(t: &T) -> Self
