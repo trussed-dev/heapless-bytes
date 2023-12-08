@@ -13,10 +13,6 @@ use core::{
     ptr,
 };
 
-// bring trait in scope to use `consts::Uxx::USIZE` etc.,
-// to get the corresponding size of Bytes.
-pub use typenum::{IsGreaterOrEqual, True, Unsigned};
-
 use heapless::Vec;
 
 use serde::{
