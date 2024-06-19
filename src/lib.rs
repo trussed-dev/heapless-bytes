@@ -32,15 +32,15 @@ pub type Bytes16 = Bytes<16>;
 pub type Bytes32 = Bytes<32>;
 pub type Bytes64 = Bytes<64>;
 
-impl<const N: usize> From<Vec<u8, N>> for Bytes<N> {
-    fn from(vec: Vec<u8, N>) -> Self {
-        Self { bytes: vec }
+impl<const N: usize, const M: usize> From<Vec<u8, M>> for Bytes<N> {
+    fn from(vec: Vec<u8, M>) -> Self {
+        Bytes { bytes: vec }.increase_capacity()
     }
 }
 
-impl<const N: usize> From<Bytes<N>> for Vec<u8, N> {
-    fn from(value: Bytes<N>) -> Self {
-        value.bytes
+impl<const N: usize, const M: usize> From<Bytes<M>> for Vec<u8, N> {
+    fn from(value: Bytes<M>) -> Self {
+        value.increase_capacity().bytes
     }
 }
 
@@ -56,7 +56,7 @@ impl<const N: usize> TryFrom<&[u8]> for Bytes<N> {
 impl<const N: usize> Bytes<N> {
     /// Construct a new, empty `Bytes<N>`.
     pub fn new() -> Self {
-        Bytes::from(Vec::new())
+        Self { bytes: Vec::new() }
     }
 
     pub fn as_ptr(&self) -> *const u8 {
@@ -315,7 +315,7 @@ impl<const N: usize> Bytes<N> {
         let mut bytes = Vec::new();
         // bytes has length 0 and capacity M, self has length N, N <= M, so this can never panic
         bytes.extend_from_slice(self.as_slice()).unwrap();
-        bytes.into()
+        Bytes { bytes }
     }
 }
 
@@ -364,12 +364,12 @@ impl<const I: usize, const J: usize> AssertLessThanEq<I, J> {
 /// let bytes: Bytes<3> = Bytes::from(&[0, 1, 2, 3]);  // does not compile
 /// ```
 impl<const N: usize, const M: usize> From<&[u8; M]> for Bytes<N> {
-    fn from(bytes: &[u8; M]) -> Self {
+    fn from(data: &[u8; M]) -> Self {
         let () = AssertLessThanEq::<M, N>::ASSERT;
-        let mut vec = Vec::new();
+        let mut bytes = Vec::new();
         // vec has length 0 and capacity N, bytes has length M, M <= N, so this can never panic
-        vec.extend_from_slice(bytes).unwrap();
-        vec.into()
+        bytes.extend_from_slice(data).unwrap();
+        Bytes { bytes }
     }
 }
 
@@ -560,7 +560,7 @@ impl<'de, const N: usize> Deserialize<'de> for Bytes<N> {
 }
 
 #[cfg(test)]
-mod tests_serde {
+mod tests {
     use super::*;
     use serde_test::{assert_tokens, Token};
 
@@ -594,5 +594,13 @@ mod tests_serde {
                 Bytes::<10>::try_from(b"\0abcde\n".as_slice()).unwrap()
             )
         );
+    }
+
+    #[test]
+    fn from() {
+        let _: Bytes<10> = [0; 10].into();
+        let _: Bytes<10> = (&[0; 8]).into();
+        let _: Bytes<10> = Vec::<u8, 10>::new().into();
+        let _: Bytes<10> = Vec::<u8, 9>::new().into();
     }
 }
