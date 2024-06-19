@@ -42,18 +42,6 @@ impl<const N: usize> Bytes<N> {
         Bytes::from(Vec::new())
     }
 
-    // /// Construct a new, empty `Bytes<N>` with the specified capacity.
-    // pub fn with_capacity(cap: usize) -> Self {
-    //     Bytes<N>::from(Vec::with_capacity(cap))
-    // }
-
-    /// Wrap existing bytes in a `Bytes<N>`.
-    pub fn from<T: Into<Vec<u8, N>>>(bytes: T) -> Self {
-        Bytes {
-            bytes: bytes.into(),
-        }
-    }
-
     /// Unwraps the Vec<u8, N>, same as `into_vec`.
     pub fn into_inner(self) -> Vec<u8, N> {
         self.bytes
@@ -208,6 +196,59 @@ impl<const N: usize> Bytes<N> {
         let size = writer.bytes_written();
         vec.resize_default(size).unwrap();
         Self::from(vec)
+    }
+}
+
+/// Construct a `Bytes<N>` instance from an array with `N` elements.
+///
+/// Currently, the array is copied, but a more efficient implementation could be used in the
+/// future.
+///
+/// ```
+/// # use heapless_bytes::Bytes;
+/// let bytes: Bytes<3> = Bytes::from([0, 1, 2]);
+/// ```
+///
+/// Length mismatches cause a compiler error:
+/// ```compile_fail
+/// # use heapless_bytes::Bytes;
+/// let bytes: Bytes<3> = Bytes::from([0, 1]);  // does not compile
+/// ```
+/// ```compile_fail
+/// # use heapless_bytes::Bytes;
+/// let bytes: Bytes<3> = Bytes::from([0, 1, 2, 3]);  // does not compile
+/// ```
+impl<const N: usize> From<[u8; N]> for Bytes<N> {
+    fn from(bytes: [u8; N]) -> Self {
+        Self::from(&bytes)
+    }
+}
+
+/// Construct a `Bytes<N>` instance by copying from an array with `N` or less elements.
+///
+/// ```
+/// # use heapless_bytes::Bytes;
+/// let bytes: Bytes<3> = Bytes::from(&[0, 1, 2]);
+/// let shorter_bytes: Bytes<3> = Bytes::from(&[0, 1]);
+/// ```
+///
+/// Overlong input data causes a compiler error:
+/// ```compile_fail
+/// # use heapless_bytes::Bytes;
+/// let bytes: Bytes<3> = Bytes::from(&[0, 1, 2, 3]);  // does not compile
+/// ```
+impl<const N: usize, const M: usize> From<&[u8; M]> for Bytes<N> {
+    fn from(bytes: &[u8; M]) -> Self {
+        struct AssertLessThanEq<const I: usize, const J: usize>;
+        impl<const I: usize, const J: usize> AssertLessThanEq<I, J> {
+            const ASSERT: () = assert!(I <= J, "Cannot convert infallibly between two arrays when the capacity of the new array is not sufficient");
+        }
+        let () = AssertLessThanEq::<M, N>::ASSERT;
+
+        let mut vec = Vec::new();
+        // vec has length 0 and capacity N, bytes has length M, M <= N, so this can never panic
+        vec.extend_from_slice(bytes).unwrap();
+        vec.into()
     }
 }
 
