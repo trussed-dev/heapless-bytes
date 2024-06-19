@@ -5,6 +5,9 @@
 #![cfg_attr(not(test), no_std)]
 #![allow(clippy::result_unit_err)]
 
+#[cfg(not(feature = "default"))]
+compile_error!("default features are required so that functionality can be put behind a feature flag in the future");
+
 use core::{
     cmp::Ordering,
     fmt::{self, Debug},
@@ -53,7 +56,7 @@ impl<const N: usize> TryFrom<&[u8]> for Bytes<N> {
 impl<const N: usize> Bytes<N> {
     /// Construct a new, empty `Bytes<N>`.
     pub fn new() -> Self {
-        Bytes::from(Vec::new())
+        Self { bytes: Vec::new() }
     }
 
     pub fn as_ptr(&self) -> *const u8 {
@@ -526,12 +529,26 @@ impl<const N: usize> Hash for Bytes<N> {
     }
 }
 
+#[derive(Clone)]
+pub struct IntoIter<const N: usize> {
+    inner: <Vec<u8, N> as IntoIterator>::IntoIter,
+}
+
+impl<const N: usize> Iterator for IntoIter<N> {
+    type Item = u8;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next()
+    }
+}
+
 impl<const N: usize> IntoIterator for Bytes<N> {
     type Item = u8;
-    type IntoIter = <Vec<u8, N> as IntoIterator>::IntoIter;
+    type IntoIter = IntoIter<N>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.bytes.into_iter()
+        IntoIter {
+            inner: self.bytes.into_iter(),
+        }
     }
 }
 

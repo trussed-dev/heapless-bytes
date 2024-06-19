@@ -17,3 +17,6 @@ serde = { version = "1.0", default-features = false }
 
 [dev-dependencies]
 serde_test = "1.0.176"
+
+[features]
+default = []
