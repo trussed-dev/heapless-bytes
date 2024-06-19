@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@master
+
+    - name: Check code
+      run: cargo check
+    - name: Run tests
+      run: cargo test
+    - name: Run rustfmt
+      run: cargo fmt -- --check
+    - name: Run clippy
+      run: cargo clippy -- --deny warnings
+    - name: Check documentation
+      run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
