@@ -602,29 +602,14 @@ impl<'de, const N: usize> Deserialize<'de> for Bytes<N> {
             type Value = Bytes<N>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                formatter.write_str("a sequence")
+                formatter.write_str("a sequence of bytes")
             }
 
             fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                if v.len() > N {
-                    // hprintln!("error! own size: {}, data size: {}", N::to_usize(), v.len()).ok();
-                    // return Err(E::invalid_length(values.capacity() + 1, &self))?;
-                    return Err(E::invalid_length(v.len(), &self))?;
-                }
-                let mut buf: Vec<u8, N> = Vec::new();
-                // avoid unwrapping even though redundant
-                match buf.extend_from_slice(v) {
-                    Ok(()) => {}
-                    Err(()) => {
-                        // hprintln!("error! own size: {}, data size: {}", N::to_usize(), v.len()).ok();
-                        // return Err(E::invalid_length(values.capacity() + 1, &self))?;
-                        return Err(E::invalid_length(v.len(), &self))?;
-                    }
-                }
-                Ok(Bytes::<N>::from(buf))
+                Bytes::try_from(v).map_err(|()| E::invalid_length(v.len(), &self))
             }
 
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
