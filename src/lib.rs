@@ -171,6 +171,30 @@ impl<const N: usize> Bytes<N> {
         self.bytes.resize_default(self.bytes.capacity()).ok();
     }
 
+    /// Copy the contents of this `Bytes` instance into a new instance with a higher capacity.
+    ///
+    /// ```
+    /// # use heapless_bytes::Bytes;
+    /// let bytes32: Bytes<32> = Bytes::from([0; 32]);
+    /// let bytes64: Bytes<64> = bytes32.increase_capacity();
+    /// assert_eq!(bytes64.len(), 32);
+    /// assert_eq!(bytes64.capacity(), 64);
+    /// ```
+    ///
+    /// Decreasing the capacity causes a compiler error:
+    /// ```compile_fail
+    /// # use heapless_bytes::Bytes;
+    /// let bytes32: Bytes<32> = Bytes::from([0; 32]);
+    /// let bytes16: Bytes<16> = bytes32.increase_capacity();
+    /// ```
+    pub fn increase_capacity<const M: usize>(&self) -> Bytes<M> {
+        let () = AssertLessThanEq::<N, M>::ASSERT;
+        let mut bytes = Vec::new();
+        // bytes has length 0 and capacity M, self has length N, N <= M, so this can never panic
+        bytes.extend_from_slice(self.as_slice()).unwrap();
+        bytes.into()
+    }
+
     /// Fallible conversion into differently sized byte buffer.
     pub fn to_bytes<const M: usize>(&self) -> Result<Bytes<M>, ()> {
         Bytes::<M>::from_slice(self)
@@ -224,6 +248,12 @@ impl<const N: usize> From<[u8; N]> for Bytes<N> {
     }
 }
 
+struct AssertLessThanEq<const I: usize, const J: usize>;
+
+impl<const I: usize, const J: usize> AssertLessThanEq<I, J> {
+    const ASSERT: () = assert!(I <= J, "Cannot convert infallibly between two arrays when the capacity of the new array is not sufficient");
+}
+
 /// Construct a `Bytes<N>` instance by copying from an array with `N` or less elements.
 ///
 /// ```
@@ -239,12 +269,7 @@ impl<const N: usize> From<[u8; N]> for Bytes<N> {
 /// ```
 impl<const N: usize, const M: usize> From<&[u8; M]> for Bytes<N> {
     fn from(bytes: &[u8; M]) -> Self {
-        struct AssertLessThanEq<const I: usize, const J: usize>;
-        impl<const I: usize, const J: usize> AssertLessThanEq<I, J> {
-            const ASSERT: () = assert!(I <= J, "Cannot convert infallibly between two arrays when the capacity of the new array is not sufficient");
-        }
         let () = AssertLessThanEq::<M, N>::ASSERT;
-
         let mut vec = Vec::new();
         // vec has length 0 and capacity N, bytes has length M, M <= N, so this can never panic
         vec.extend_from_slice(bytes).unwrap();
