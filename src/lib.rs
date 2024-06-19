@@ -56,7 +56,7 @@ impl<const N: usize> TryFrom<&[u8]> for Bytes<N> {
 impl<const N: usize> Bytes<N> {
     /// Construct a new, empty `Bytes<N>`.
     pub fn new() -> Self {
-        Self { bytes: Vec::new() }
+        Bytes::from(Vec::new())
     }
 
     pub fn as_ptr(&self) -> *const u8 {
@@ -281,78 +281,6 @@ impl<const N: usize> Bytes<N> {
     /// original order, and preserves the order of the retained elements.
     pub fn retain_mut(&mut self, f: impl FnMut(&mut u8) -> bool) {
         self.bytes.retain_mut(f)
-    }
-}
-
-impl<const N: usize> Bytes<N> {
-    // /// Some APIs offer an interface of the form `f(&mut [u8]) -> Result<usize, E>`,
-    // /// with the contract that the Ok-value signals how many bytes were written.
-    // ///
-    // /// This constructor allows wrapping such interfaces in a more ergonomic way,
-    // /// returning a Bytes willed using `f`.
-    // ///
-    // /// It seems it's not possible to do this as an actual `TryFrom` implementation.
-    // pub fn from_constructor<E>(
-    //     f: impl FnOnce(&mut [u8]) -> core::result::Result<usize, E>,
-    // ) -> core::result::Result<Self, E> {
-    //     let mut data = Self::new();
-    //     data.resize_to_capacity();
-    //     let result = f(&mut data);
-
-    //     result.map(|count| {
-    //         data.resize_default(count)
-    //             .expect("Contructor returned size larger than capacity");
-    //         data
-    //     })
-    // }
-
-    // cf. https://internals.rust-lang.org/t/add-vec-insert-slice-at-to-insert-the-content-of-a-slice-at-an-arbitrary-index/11008/3
-    pub fn insert_slice_at(&mut self, slice: &[u8], at: usize) -> core::result::Result<(), ()> {
-        let l = slice.len();
-        let before = self.len();
-
-        // make space
-        self.bytes.resize_default(before + l)?;
-
-        // move back existing
-        let raw: &mut [u8] = &mut self.bytes;
-        raw.copy_within(at..before, at + l);
-
-        // insert slice
-        raw[at..][..l].copy_from_slice(slice);
-
-        Ok(())
-    }
-
-    // pub fn insert(&mut self, index: usize, item: u8) -> Result<(), u8> {
-    //     self.insert_slice_at(&[item], index).map_err(|_| item)
-    // }
-
-    // pub fn remove(&mut self, index: usize) -> Result<u8, ()> {
-    //     if index < self.len() {
-    //         unsafe { Ok(self.remove_unchecked(index)) }
-    //     } else {
-    //         Err(())
-    //     }
-    // }
-
-    // pub(crate) unsafe fn remove_unchecked(&mut self, index: usize) -> u8 {
-    //     // the place we are taking from.
-    //     let p = self.bytes.as_mut_ptr().add(index);
-
-    //     // copy it out, unsafely having a copy of the value on
-    //     // the stack and in the vector at the same time.
-    //     let ret = ptr::read(p);
-
-    //     // shift everything down to fill in that spot.
-    //     ptr::copy(p.offset(1), p, self.len() - index - 1);
-
-    //     self.resize_default(self.len() - 1).unwrap();
-    //     ret
-    // }
-
-    pub fn resize_default(&mut self, new_len: usize) -> core::result::Result<(), ()> {
-        self.bytes.resize_default(new_len)
     }
 
     pub fn resize_to_capacity(&mut self) {
