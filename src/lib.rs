@@ -546,21 +546,3 @@ mod tests_serde {
         );
     }
 }
-
-#[cfg(test)]
-#[cfg(feature = "cbor")]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_client_data_hash() {
-        let mut minimal = [
-            0x50u8, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x41, 0x42, 0x43,
-            0x44, 0x45, 0x46,
-        ];
-
-        let client_data_hash: Bytes<17> = serde_cbor::de::from_mut_slice(&mut minimal).unwrap();
-
-        assert_eq!(client_data_hash, b"1234567890ABCDEF");
-    }
-}

@@ -15,13 +15,5 @@ edition = "2021"
 heapless = { version = "0.8", default-features = false }
 serde = { version = "1.0", default-features = false }
 
-[dependencies.serde_cbor]
-version = "0.11.0"
-default-features = false
-optional = true
-
-[features]
-cbor = ["serde_cbor"]
-
 [dev-dependencies]
 serde_test = "1.0.176"
