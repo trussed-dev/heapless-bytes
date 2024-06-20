@@ -19,4 +19,5 @@ serde = { version = "1.0", default-features = false }
 serde_test = "1.0.176"
 
 [features]
-default = []
+# From/Into implementation to `heapless::Vec<u8, N>`
+"heapless-0.8" = []

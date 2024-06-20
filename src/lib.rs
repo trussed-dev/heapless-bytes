@@ -5,9 +5,6 @@
 #![cfg_attr(not(test), no_std)]
 #![allow(clippy::result_unit_err)]
 
-#[cfg(not(feature = "default"))]
-compile_error!("default features are required so that functionality can be put behind a feature flag in the future");
-
 use core::{
     cmp::Ordering,
     fmt::{self, Debug},
@@ -32,12 +29,14 @@ pub type Bytes16 = Bytes<16>;
 pub type Bytes32 = Bytes<32>;
 pub type Bytes64 = Bytes<64>;
 
+#[cfg(feature = "heapless-0.8")]
 impl<const N: usize, const M: usize> From<Vec<u8, M>> for Bytes<N> {
     fn from(vec: Vec<u8, M>) -> Self {
         Bytes { bytes: vec }.increase_capacity()
     }
 }
 
+#[cfg(feature = "heapless-0.8")]
 impl<const N: usize, const M: usize> From<Bytes<M>> for Vec<u8, N> {
     fn from(value: Bytes<M>) -> Self {
         value.increase_capacity().bytes
@@ -600,7 +599,9 @@ mod tests {
     fn from() {
         let _: Bytes<10> = [0; 10].into();
         let _: Bytes<10> = (&[0; 8]).into();
+        #[cfg(feature = "heapless-0.8")]
         let _: Bytes<10> = Vec::<u8, 10>::new().into();
+        #[cfg(feature = "heapless-0.8")]
         let _: Bytes<10> = Vec::<u8, 9>::new().into();
     }
 }
