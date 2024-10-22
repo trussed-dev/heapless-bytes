@@ -1,7 +1,7 @@
 [package]
 name = "heapless-bytes"
-version = "0.4.0"
-authors = ["Nicolas Stalder <n@stalder.io>"]
+version = "0.5.0"
+authors = ["The Trussed developers", "Nicolas Stalder <n@stalder.io>", "Nitrokey GmbH"]
 license = "Apache-2.0 OR MIT"
 description = "Newtype around heapless byte Vec with efficient serde."
 categories = ["embedded", "encoding", "no-std"]
@@ -12,12 +12,11 @@ edition = "2021"
 
 
 [dependencies]
-heapless = { version = "0.8", default-features = false }
+heapless = { version = "0.9.1", default-features = false }
 serde = { version = "1.0", default-features = false }
 
 [dev-dependencies]
 serde_test = "1.0.176"
 
 [features]
-# From/Into implementation to `heapless::Vec<u8, N>`
-"heapless-0.8" = []
+"heapless-0.9" = []

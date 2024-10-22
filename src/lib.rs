@@ -9,53 +9,220 @@ use core::{
     cmp::Ordering,
     fmt::{self, Debug},
     hash::{Hash, Hasher},
+    marker::PhantomData,
     ops::{Deref, DerefMut},
 };
 
-use heapless::Vec;
+use heapless::{
+    vec::{OwnedVecStorage, Vec, VecInner, ViewVecStorage},
+    CapacityError, LenType,
+};
 
 use serde::{
     de::{Deserialize, Deserializer, Visitor},
     ser::{Serialize, Serializer},
 };
+pub use storage::BytesStorage;
 
-#[derive(Clone, Default, Eq, Ord)]
-pub struct Bytes<const N: usize> {
-    bytes: Vec<u8, N>,
-}
+mod storage {
+    use super::{BytesInner, BytesView};
+    use heapless::{
+        vec::{OwnedVecStorage, VecStorage, ViewVecStorage},
+        LenType,
+    };
 
-pub type Bytes8 = Bytes<8>;
-pub type Bytes16 = Bytes<16>;
-pub type Bytes32 = Bytes<32>;
-pub type Bytes64 = Bytes<64>;
+    /// Trait defining how data for a Byte buffer is stored.
+    ///
+    /// There's two implementations available:
+    ///
+    /// - [`OwnedVecStorage`]: stores the data in an array whose size is known at compile time.
+    /// - [`ViewVecStorage`]: stores the data in an unsized slice
+    ///
+    /// This allows [`BytesInner`] to be generic over either sized or unsized storage. The [`heapless-bytes`](crate)
+    /// crate contains a [`BytesInner`] struct that's generic on [`BytesStorage`],
+    /// and two type aliases for convenience:
+    ///
+    /// - [`Bytes<N>`](crate::Bytes) = `BytesInner<OwnedVecStorage<u8, N>>`
+    /// - [`BytesView<T>`](crate::BytesView) = `BytesInner<ViewVecStorage<u8>>`
+    ///
+    /// `Bytes` can be unsized into `StrinsgView`, either by unsizing coercions such as `&mut Bytes -> &mut BytesView` or
+    /// `Box<Bytes> -> Box<BytesView>`, or explicitly with [`.as_view()`](crate::Bytes::as_view) or [`.as_mut_view()`](crate::Bytes::as_mut_view).
+    ///
+    /// This trait is sealed, so you cannot implement it for your own types. You can only use
+    /// the implementations provided by this crate.
+    ///
+    /// [`OwnedVecStorage`]: heapless::vec::OwnedVecStorage
+    /// [`ViewVecStorage`]: heapless::vec::ViewVecStorage
+    pub trait BytesStorage: BytesStorageSealed {}
+    pub trait BytesStorageSealed: VecStorage<u8> {
+        fn as_byte_view<LenT: LenType>(this: &BytesInner<LenT, Self>) -> &BytesView<LenT>
+        where
+            Self: BytesStorage;
+        fn as_byte_mut_view<LenT: LenType>(
+            this: &mut BytesInner<LenT, Self>,
+        ) -> &mut BytesView<LenT>
+        where
+            Self: BytesStorage;
+    }
 
-#[cfg(feature = "heapless-0.8")]
-impl<const N: usize, const M: usize> From<Vec<u8, M>> for Bytes<N> {
-    fn from(vec: Vec<u8, M>) -> Self {
-        Bytes { bytes: vec }.increase_capacity()
+    impl<const N: usize> BytesStorage for OwnedVecStorage<u8, N> {}
+    impl<const N: usize> BytesStorageSealed for OwnedVecStorage<u8, N> {
+        fn as_byte_view<LenT: LenType>(this: &BytesInner<LenT, Self>) -> &BytesView<LenT>
+        where
+            Self: BytesStorage,
+        {
+            this
+        }
+        fn as_byte_mut_view<LenT: LenType>(
+            this: &mut BytesInner<LenT, Self>,
+        ) -> &mut BytesView<LenT>
+        where
+            Self: BytesStorage,
+        {
+            this
+        }
+    }
+
+    impl BytesStorage for ViewVecStorage<u8> {}
+
+    impl BytesStorageSealed for ViewVecStorage<u8> {
+        fn as_byte_view<LenT: LenType>(this: &BytesInner<LenT, Self>) -> &BytesView<LenT>
+        where
+            Self: BytesStorage,
+        {
+            this
+        }
+        fn as_byte_mut_view<LenT: LenType>(
+            this: &mut BytesInner<LenT, Self>,
+        ) -> &mut BytesView<LenT>
+        where
+            Self: BytesStorage,
+        {
+            this
+        }
     }
 }
 
-#[cfg(feature = "heapless-0.8")]
-impl<const N: usize, const M: usize> From<Bytes<M>> for Vec<u8, N> {
-    fn from(value: Bytes<M>) -> Self {
-        value.increase_capacity().bytes
+pub type OwnedBytesStorage<const N: usize> = OwnedVecStorage<u8, N>;
+pub type ViewBytesStorage = ViewVecStorage<u8>;
+
+pub struct BytesInner<LenT: LenType, S: BytesStorage + ?Sized> {
+    bytes: VecInner<u8, LenT, S>,
+}
+
+pub type Bytes<const N: usize, LenT = usize> = BytesInner<LenT, OwnedBytesStorage<N>>;
+pub type BytesView<LenT = usize> = BytesInner<LenT, ViewBytesStorage>;
+
+pub type Bytes8<LenT = usize> = Bytes<8, LenT>;
+pub type Bytes16<LenT = usize> = Bytes<16, LenT>;
+pub type Bytes32<LenT = usize> = Bytes<32, LenT>;
+pub type Bytes64<LenT = usize> = Bytes<64, LenT>;
+
+impl<const N: usize, LenT: LenType> Clone for Bytes<N, LenT> {
+    fn clone(&self) -> Self {
+        Self {
+            bytes: self.bytes.clone(),
+        }
     }
 }
 
-impl<const N: usize> TryFrom<&[u8]> for Bytes<N> {
-    type Error = ();
-    fn try_from(value: &[u8]) -> Result<Self, ()> {
+impl<S: BytesStorage + ?Sized, LenT: LenType> Eq for BytesInner<LenT, S> {}
+impl<S: BytesStorage + ?Sized, LenT: LenType> Ord for BytesInner<LenT, S> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.bytes.cmp(&other.bytes)
+    }
+}
+
+#[cfg(feature = "heapless-0.9")]
+impl<const N: usize, LenT: LenType> From<Vec<u8, N, LenT>> for Bytes<N, LenT> {
+    fn from(vec: Vec<u8, N, LenT>) -> Self {
+        Bytes { bytes: vec }
+    }
+}
+
+#[cfg(feature = "heapless-0.9")]
+impl<const N: usize, LenT: LenType> From<Bytes<N, LenT>> for Vec<u8, N, LenT> {
+    fn from(value: Bytes<N, LenT>) -> Self {
+        value.bytes
+    }
+}
+
+impl<const N: usize, LenT: LenType> TryFrom<&[u8]> for Bytes<N, LenT> {
+    type Error = CapacityError;
+    fn try_from(value: &[u8]) -> Result<Self, CapacityError> {
         Ok(Self {
             bytes: Vec::from_slice(value)?,
         })
     }
 }
 
-impl<const N: usize> Bytes<N> {
+impl<const N: usize, LenT: LenType> Default for Bytes<N, LenT> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const N: usize, LenT: LenType> Bytes<N, LenT> {
     /// Construct a new, empty `Bytes<N>`.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { bytes: Vec::new() }
+    }
+    /// Get the capacity of the buffer.
+    ///
+    /// Always equal to the `N` const generic.
+    pub const fn const_capacity(&self) -> usize {
+        N
+    }
+
+    /// Copy the contents of this `Bytes` instance into a new instance with a higher capacity.
+    ///
+    /// ```
+    /// # use heapless_bytes::Bytes;
+    /// let bytes32: Bytes<32> = Bytes::from([0; 32]);
+    /// let bytes64: Bytes<64> = bytes32.increase_capacity();
+    /// assert_eq!(bytes64.len(), 32);
+    /// assert_eq!(bytes64.capacity(), 64);
+    /// ```
+    ///
+    /// Decreasing the capacity causes a compiler error:
+    /// ```compile_fail
+    /// # use heapless_bytes::Bytes;
+    /// let bytes32: Bytes<32> = Bytes::from([0; 32]);
+    /// let bytes16: Bytes<16> = bytes32.increase_capacity();
+    /// ```
+    pub fn increase_capacity<const M: usize>(&self) -> Bytes<M, LenT> {
+        let () = AssertLessThanEq::<N, M>::ASSERT;
+        let mut bytes = Vec::new();
+        // bytes has length 0 and capacity M, self has length N, N <= M, so this can never panic
+        bytes.extend_from_slice(self.as_slice()).unwrap();
+        Bytes { bytes }
+    }
+
+    pub fn cast_len_type<NewLenT: LenType>(self) -> Bytes<N, NewLenT> {
+        BytesInner {
+            bytes: self.bytes.cast_len_type(),
+        }
+    }
+}
+
+#[cfg(feature = "heapless-0.9")]
+impl<S: BytesStorage + ?Sized, LenT: LenType> AsMut<heapless::vec::VecInner<u8, LenT, S>>
+    for BytesInner<LenT, S>
+{
+    fn as_mut(&mut self) -> &mut heapless::vec::VecInner<u8, LenT, S> {
+        &mut self.bytes
+    }
+}
+
+impl<S: BytesStorage + ?Sized, LenT: LenType> BytesInner<LenT, S> {
+    /// Get a "view" to the Buffer with the `N` const generic erased
+    pub fn as_view(&self) -> &BytesView<LenT> {
+        S::as_byte_view(self)
+    }
+
+    /// Get a mutable "view" to the Buffer with the `N` const generic erased
+    pub fn as_mut_view(&mut self) -> &mut BytesView<LenT> {
+        S::as_byte_mut_view(self)
     }
 
     pub fn as_ptr(&self) -> *const u8 {
@@ -80,7 +247,7 @@ impl<const N: usize> Bytes<N> {
     /// Get the capacity of the buffer.
     ///
     /// Always equal to the `N` const generic.
-    pub const fn capacity(&self) -> usize {
+    pub fn capacity(&self) -> usize {
         self.bytes.capacity()
     }
 
@@ -113,7 +280,7 @@ impl<const N: usize> Bytes<N> {
     }
 
     /// Extend the buffer with the contents of a slice
-    pub fn extend_from_slice(&mut self, other: &[u8]) -> Result<(), ()> {
+    pub fn extend_from_slice(&mut self, other: &[u8]) -> Result<(), CapacityError> {
         self.bytes.extend_from_slice(other)
     }
 
@@ -159,7 +326,7 @@ impl<const N: usize> Bytes<N> {
     /// `new_len` is less than `len`, the buffer is simply truncated.
     ///
     /// See also [`resize_zero`](Self::resize_zero).
-    pub fn resize(&mut self, new_len: usize, value: u8) -> Result<(), ()> {
+    pub fn resize(&mut self, new_len: usize, value: u8) -> Result<(), CapacityError> {
         self.bytes.resize(new_len, value)
     }
 
@@ -168,7 +335,7 @@ impl<const N: usize> Bytes<N> {
     /// If new_len is greater than len, the buffer is extended by the
     /// difference, with each additional slot filled with `0`. If
     /// `new_len` is less than `len`, the buffer is simply truncated.
-    pub fn resize_zero(&mut self, new_len: usize) -> Result<(), ()> {
+    pub fn resize_zero(&mut self, new_len: usize) -> Result<(), CapacityError> {
         self.bytes.resize_default(new_len)
     }
 
@@ -287,34 +454,8 @@ impl<const N: usize> Bytes<N> {
     }
 
     /// Low-noise conversion between lengths.
-    ///
-    /// For an infaillible version when `M` is known to be larger than `N`, see [`increase_capacity`](Self::increase_capacity)
-    pub fn resize_capacity<const M: usize>(&self) -> Result<Bytes<M>, ()> {
+    pub fn resize_capacity<const M: usize>(&self) -> Result<Bytes<M>, CapacityError> {
         Bytes::try_from(&**self)
-    }
-
-    /// Copy the contents of this `Bytes` instance into a new instance with a higher capacity.
-    ///
-    /// ```
-    /// # use heapless_bytes::Bytes;
-    /// let bytes32: Bytes<32> = Bytes::from([0; 32]);
-    /// let bytes64: Bytes<64> = bytes32.increase_capacity();
-    /// assert_eq!(bytes64.len(), 32);
-    /// assert_eq!(bytes64.capacity(), 64);
-    /// ```
-    ///
-    /// Decreasing the capacity causes a compiler error:
-    /// ```compile_fail
-    /// # use heapless_bytes::Bytes;
-    /// let bytes32: Bytes<32> = Bytes::from([0; 32]);
-    /// let bytes16: Bytes<16> = bytes32.increase_capacity();
-    /// ```
-    pub fn increase_capacity<const M: usize>(&self) -> Bytes<M> {
-        let () = AssertLessThanEq::<N, M>::ASSERT;
-        let mut bytes = Vec::new();
-        // bytes has length 0 and capacity M, self has length N, N <= M, so this can never panic
-        bytes.extend_from_slice(self.as_slice()).unwrap();
-        Bytes { bytes }
     }
 }
 
@@ -337,7 +478,7 @@ impl<const N: usize> Bytes<N> {
 /// # use heapless_bytes::Bytes;
 /// let bytes: Bytes<3> = Bytes::from([0, 1, 2, 3]);  // does not compile
 /// ```
-impl<const N: usize> From<[u8; N]> for Bytes<N> {
+impl<const N: usize, LenT: LenType> From<[u8; N]> for Bytes<N, LenT> {
     fn from(bytes: [u8; N]) -> Self {
         Self::from(&bytes)
     }
@@ -362,7 +503,7 @@ impl<const I: usize, const J: usize> AssertLessThanEq<I, J> {
 /// # use heapless_bytes::Bytes;
 /// let bytes: Bytes<3> = Bytes::from(&[0, 1, 2, 3]);  // does not compile
 /// ```
-impl<const N: usize, const M: usize> From<&[u8; M]> for Bytes<N> {
+impl<const N: usize, const M: usize, LenT: LenType> From<&[u8; M]> for Bytes<N, LenT> {
     fn from(data: &[u8; M]) -> Self {
         let () = AssertLessThanEq::<M, N>::ASSERT;
         let mut bytes = Vec::new();
@@ -372,27 +513,7 @@ impl<const N: usize, const M: usize> From<&[u8; M]> for Bytes<N> {
     }
 }
 
-// impl<N, E, F> TryFrom<F> for Bytes<N>
-// where
-//     N: ArrayLength<u8>,
-//     F: FnOnce(&mut [u8]) -> Result<usize, E>,
-// {
-//     type Error = E;
-
-//     fn try_from(f: F) -> Result<Self, Self::Error>  {
-
-//         let mut data = Self::new();
-//         data.resize_to_capacity();
-//         let result = f(&mut data);
-
-//         result.map(|count| {
-//             data.resize_default(count).unwrap();
-//             data
-//         })
-//     }
-// }
-
-impl<const N: usize> Debug for Bytes<N> {
+impl<S: BytesStorage + ?Sized, LenT: LenType> Debug for BytesInner<LenT, S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // TODO: There has to be a better way :'-)
 
@@ -406,19 +527,19 @@ impl<const N: usize> Debug for Bytes<N> {
     }
 }
 
-impl<const N: usize> AsRef<[u8]> for Bytes<N> {
+impl<S: BytesStorage + ?Sized, LenT: LenType> AsRef<[u8]> for BytesInner<LenT, S> {
     fn as_ref(&self) -> &[u8] {
         &self.bytes
     }
 }
 
-impl<const N: usize> AsMut<[u8]> for Bytes<N> {
+impl<S: BytesStorage + ?Sized, LenT: LenType> AsMut<[u8]> for BytesInner<LenT, S> {
     fn as_mut(&mut self) -> &mut [u8] {
         &mut self.bytes
     }
 }
 
-impl<const N: usize> Deref for Bytes<N> {
+impl<S: BytesStorage + ?Sized, LenT: LenType> Deref for BytesInner<LenT, S> {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
@@ -426,13 +547,13 @@ impl<const N: usize> Deref for Bytes<N> {
     }
 }
 
-impl<const N: usize> DerefMut for Bytes<N> {
+impl<S: BytesStorage + ?Sized, LenT: LenType> DerefMut for BytesInner<LenT, S> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.bytes
     }
 }
 
-impl<Rhs, const N: usize> PartialEq<Rhs> for Bytes<N>
+impl<Rhs, S: BytesStorage + ?Sized, LenT: LenType> PartialEq<Rhs> for BytesInner<LenT, S>
 where
     Rhs: ?Sized + AsRef<[u8]>,
 {
@@ -441,7 +562,7 @@ where
     }
 }
 
-impl<Rhs, const N: usize> PartialOrd<Rhs> for Bytes<N>
+impl<Rhs, S: BytesStorage + ?Sized, LenT: LenType> PartialOrd<Rhs> for BytesInner<LenT, S>
 where
     Rhs: ?Sized + AsRef<[u8]>,
 {
@@ -450,27 +571,27 @@ where
     }
 }
 
-impl<const N: usize> Hash for Bytes<N> {
+impl<S: BytesStorage + ?Sized, LenT: LenType> Hash for BytesInner<LenT, S> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.bytes.hash(state);
     }
 }
 
 #[derive(Clone)]
-pub struct IntoIter<const N: usize> {
-    inner: <Vec<u8, N> as IntoIterator>::IntoIter,
+pub struct IntoIter<const N: usize, LenT: LenType = usize> {
+    inner: <Vec<u8, N, LenT> as IntoIterator>::IntoIter,
 }
 
-impl<const N: usize> Iterator for IntoIter<N> {
+impl<const N: usize, LenT: LenType> Iterator for IntoIter<N, LenT> {
     type Item = u8;
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next()
     }
 }
 
-impl<const N: usize> IntoIterator for Bytes<N> {
+impl<const N: usize, LenT: LenType> IntoIterator for Bytes<N, LenT> {
     type Item = u8;
-    type IntoIter = IntoIter<N>;
+    type IntoIter = IntoIter<N, LenT>;
 
     fn into_iter(self) -> Self::IntoIter {
         IntoIter {
@@ -479,7 +600,7 @@ impl<const N: usize> IntoIterator for Bytes<N> {
     }
 }
 
-impl<'a, const N: usize> IntoIterator for &'a Bytes<N> {
+impl<'a, S: BytesStorage + ?Sized, LenT: LenType> IntoIterator for &'a BytesInner<LenT, S> {
     type Item = &'a u8;
     type IntoIter = <&'a [u8] as IntoIterator>::IntoIter;
 
@@ -488,7 +609,7 @@ impl<'a, const N: usize> IntoIterator for &'a Bytes<N> {
     }
 }
 
-impl<'a, const N: usize> IntoIterator for &'a mut Bytes<N> {
+impl<'a, S: BytesStorage + ?Sized, LenT: LenType> IntoIterator for &'a mut BytesInner<LenT, S> {
     type Item = &'a mut u8;
     type IntoIter = <&'a mut [u8] as IntoIterator>::IntoIter;
 
@@ -497,16 +618,16 @@ impl<'a, const N: usize> IntoIterator for &'a mut Bytes<N> {
     }
 }
 
-impl<const N: usize> Serialize for Bytes<N> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+impl<S: BytesStorage + ?Sized, LenT: LenType> Serialize for BytesInner<LenT, S> {
+    fn serialize<SER>(&self, serializer: SER) -> Result<SER::Ok, SER::Error>
     where
-        S: Serializer,
+        SER: Serializer,
     {
         serializer.serialize_bytes(self)
     }
 }
 
-impl<const N: usize> core::fmt::Write for Bytes<N> {
+impl<S: BytesStorage + ?Sized, LenT: LenType> core::fmt::Write for BytesInner<LenT, S> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.bytes.write_str(s)
     }
@@ -518,15 +639,15 @@ impl<const N: usize> core::fmt::Write for Bytes<N> {
     }
 }
 
-impl<'de, const N: usize> Deserialize<'de> for Bytes<N> {
+impl<'de, const N: usize, LenT: LenType> Deserialize<'de> for Bytes<N, LenT> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        struct ValueVisitor<const N: usize>;
+        struct ValueVisitor<const N: usize, LenT: LenType>(PhantomData<LenT>);
 
-        impl<'de, const N: usize> Visitor<'de> for ValueVisitor<N> {
-            type Value = Bytes<N>;
+        impl<'de, const N: usize, LenT: LenType> Visitor<'de> for ValueVisitor<N, LenT> {
+            type Value = Bytes<N, LenT>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
                 formatter.write_str("a sequence of bytes")
@@ -536,7 +657,7 @@ impl<'de, const N: usize> Deserialize<'de> for Bytes<N> {
             where
                 E: serde::de::Error,
             {
-                Bytes::try_from(v).map_err(|()| E::invalid_length(v.len(), &self))
+                Bytes::try_from(v).map_err(|_: CapacityError| E::invalid_length(v.len(), &self))
             }
 
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
@@ -554,7 +675,7 @@ impl<'de, const N: usize> Deserialize<'de> for Bytes<N> {
             }
         }
 
-        deserializer.deserialize_bytes(ValueVisitor)
+        deserializer.deserialize_bytes(ValueVisitor(PhantomData))
     }
 }
 
@@ -590,7 +711,9 @@ mod tests {
             r"b'\x00abcde\n'",
             format!(
                 "{:?}",
-                Bytes::<10>::try_from(b"\0abcde\n".as_slice()).unwrap()
+                Bytes::<10>::try_from(b"\0abcde\n".as_slice())
+                    .unwrap()
+                    .as_view()
             )
         );
     }
@@ -599,9 +722,7 @@ mod tests {
     fn from() {
         let _: Bytes<10> = [0; 10].into();
         let _: Bytes<10> = (&[0; 8]).into();
-        #[cfg(feature = "heapless-0.8")]
-        let _: Bytes<10> = Vec::<u8, 10>::new().into();
-        #[cfg(feature = "heapless-0.8")]
-        let _: Bytes<10> = Vec::<u8, 9>::new().into();
+        #[cfg(feature = "heapless-0.9")]
+        let _: Bytes<10> = Vec::<u8, 10, usize>::new().into();
     }
 }
