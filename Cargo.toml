@@ -13,6 +13,7 @@ edition = "2021"
 
 [dependencies]
 heapless = { version = "0.9.1", default-features = false }
+bytes = { version = "1.10.1", default-features = false, optional = true }
 serde = { version = "1.0", default-features = false }
 
 [dev-dependencies]
@@ -20,3 +21,4 @@ serde_test = "1.0.176"
 
 [features]
 "heapless-0.9" = []
+bytes = ["dep:bytes"]

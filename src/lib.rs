@@ -5,6 +5,9 @@
 #![cfg_attr(not(test), no_std)]
 #![allow(clippy::result_unit_err)]
 
+#[cfg(feature = "bytes")]
+mod bytes_traits;
+
 use core::{
     cmp::Ordering,
     fmt::{self, Debug},
