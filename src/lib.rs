@@ -5,6 +5,12 @@
 #![cfg_attr(not(test), no_std)]
 #![allow(clippy::result_unit_err)]
 
+#[cfg(feature = "bytes")]
+mod bytes_traits;
+
+#[cfg(not(feature = "default"))]
+compile_error!("Default feature must be enabled for backwards compatibility");
+
 use core::{
     cmp::Ordering,
     fmt::{self, Debug},
