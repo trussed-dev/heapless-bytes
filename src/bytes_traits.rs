@@ -1,7 +1,8 @@
 use crate::storage::BytesStorage;
 use bytes::{buf::UninitSlice, BufMut};
+use heapless::LenType;
 
-unsafe impl<S: BytesStorage + ?Sized> BufMut for crate::BytesInner<S> {
+unsafe impl<S: BytesStorage + ?Sized, LenT: LenType> BufMut for crate::BytesInner<S, LenT> {
     fn remaining_mut(&self) -> usize {
         self.capacity() - self.len()
     }
