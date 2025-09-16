@@ -21,7 +21,7 @@ use heapless::{
     CapacityError, LenType,
 };
 
-use serde::{
+use serde_core::{
     de::{Deserialize, Deserializer, Visitor},
     ser::{Serialize, Serializer},
 };
@@ -658,16 +658,16 @@ impl<'de, const N: usize, LenT: LenType> Deserialize<'de> for Bytes<N, LenT> {
 
             fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
             where
-                E: serde::de::Error,
+                E: serde_core::de::Error,
             {
                 Bytes::try_from(v).map_err(|_: CapacityError| E::invalid_length(v.len(), &self))
             }
 
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
             where
-                A: serde::de::SeqAccess<'de>,
+                A: serde_core::de::SeqAccess<'de>,
             {
-                use serde::de::Error;
+                use serde_core::de::Error;
 
                 let mut this = Bytes::new();
                 while let Some(byte) = seq.next_element()? {
